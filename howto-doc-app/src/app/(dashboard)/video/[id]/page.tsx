@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Loader2, CheckCircle, FileText } from 'lucide-react'
 import { VideoEditor } from './video-editor'
+import { InlineTitle } from './inline-title'
 
 export default async function VideoEditPage({
   params,
@@ -84,7 +85,7 @@ export default async function VideoEditPage({
             <ArrowLeft className="w-4 h-4" />
           </Link>
           <div>
-            <h1 className="text-3xl font-display font-bold uppercase tracking-tight truncate max-w-md">{video.title}</h1>
+            <InlineTitle initialTitle={video.title} videoId={video.id} />
             <p className="text-zinc-500 font-sans tracking-wide uppercase font-bold text-xs mt-1">ID: {video.id}</p>
           </div>
         </div>

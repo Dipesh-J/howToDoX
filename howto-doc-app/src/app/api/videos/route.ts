@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/prisma'
-import { uploadVideo, extractFrames } from '@/lib/cloudinary'
+import { uploadVideo } from '@/lib/cloudinary'
 
 export const maxDuration = 60 // Prevent 500 timeouts on Vercel
 
@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await uploadVideo(file) as any
 
     const video = await prisma.video.create({
@@ -80,25 +81,12 @@ export async function POST(request: NextRequest) {
         status: 'UPLOADED',
         userId: user.id,
       },
-    })
-
-    const frames = await extractFrames(result.public_id, 10)
-    
-    await Promise.all(
-      frames.map((frame) =>
-        prisma.frame.create({
-          data: {
-            videoId: video.id,
-            timestamp: frame.timestamp,
-            imageUrl: frame.imageUrl,
-          },
-        })
-      )
-    )
-
-    await prisma.video.update({
-      where: { id: video.id },
-      data: { status: 'PROCESSING' },
+      include: {
+        _count: {
+          select: { frames: true, documents: true },
+        },
+        frames: true,
+      }
     })
 
     return NextResponse.json(video)

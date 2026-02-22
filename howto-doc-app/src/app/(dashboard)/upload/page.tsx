@@ -70,7 +70,7 @@ export default function UploadPage() {
             <div className="mb-8 pb-4 border-b border-border">
                 <h1 className="text-4xl font-display font-bold mb-2 uppercase tracking-tight">Upload Video</h1>
                 <p className="text-zinc-400 font-sans">
-                    Upload a tutorial video, and we'll generate a step-by-step guide.
+                    Upload a tutorial video, and we&apos;ll generate a step-by-step guide.
                 </p>
             </div>
 

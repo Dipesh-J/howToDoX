@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
-import { Sparkles, Loader2, Check, Globe, Download, Edit3, Zap } from 'lucide-react'
-import { analyzeFrame, generateDocumentTitle } from '@/lib/gemini'
+import { useState, useRef, useEffect, useMemo } from 'react'
+import { Sparkles, Loader2, Check, Globe, Download, Edit3, Zap, FileText } from 'lucide-react'
+import { analyzeVideoMultimodal, generateDocumentTitle } from '@/lib/gemini'
+import { useRouter } from 'next/navigation'
 
 interface Frame {
   id: string
@@ -11,6 +12,39 @@ interface Frame {
   aiSuggestion: string | null
   userEdit: string | null
   stepNumber: number | null
+}
+
+const formatTimestamp = (seconds: number) => {
+  const mins = Math.floor(seconds / 60)
+  const secs = seconds % 60
+  return `${mins}:${secs.toString().padStart(2, '0')}`
+}
+
+const generateMarkdown = (framesList: Frame[], titleText: string) => {
+  const steps = framesList
+    .map((frame, index) => {
+      const description = frame.userEdit || frame.aiSuggestion || 'No description'
+      return `### Step ${frame.stepNumber || index + 1}: ${formatTimestamp(frame.timestamp)}
+
+![Frame at ${formatTimestamp(frame.timestamp)}](${frame.imageUrl})
+
+${description}
+`
+    })
+    .join('\n')
+
+  return `# How to ${titleText}
+
+## Overview
+This guide will walk you through the steps shown in the tutorial video.
+
+## Steps
+
+${steps}
+
+---
+*Generated with HowToDoX*
+`
 }
 
 interface Video {
@@ -27,78 +61,77 @@ interface VideoEditorProps {
 }
 
 export function VideoEditor({ video }: VideoEditorProps) {
+  const router = useRouter()
   const [frames, setFrames] = useState<Frame[]>(video.frames)
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [isTranslating, setIsTranslating] = useState(false)
   const [selectedLanguage, setSelectedLanguage] = useState('en')
-  const [generatedDoc, setGeneratedDoc] = useState('')
+  const [generatedTitle, setGeneratedTitle] = useState(video.title)
   const [translatedDoc, setTranslatedDoc] = useState('')
 
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+
   const currentFrame = frames[currentFrameIndex]
+  const hasAnalyzed = frames.length > 0
+
+  const generatedDoc = useMemo(() => {
+    if (!hasAnalyzed) return ''
+    return generateMarkdown(frames, generatedTitle)
+  }, [frames, hasAnalyzed, generatedTitle])
 
   const handleAnalyze = async () => {
     setIsAnalyzing(true)
     try {
-      const frameDescriptions = await Promise.all(
-        frames.map(async (frame) => {
-          const description = await analyzeFrame(frame.imageUrl)
-          return description
-        })
-      )
+      // 1. Send the entire video to Gemini natively!
+      const newFramesData = await analyzeVideoMultimodal(video.id)
 
-      const updatedFrames = frames.map((frame, index) => ({
-        ...frame,
-        aiSuggestion: frameDescriptions[index],
+      // 2. Temporarily hydrate local state for instant UI update
+      const updatedFrames = newFramesData.map((frame, index) => ({
+        id: Math.random().toString(), // temporary until router.refresh maps DB ids
+        timestamp: frame.timestamp,
+        imageUrl: frame.imageUrl,
+        aiSuggestion: frame.aiSuggestion,
+        userEdit: null,
         stepNumber: index + 1,
-      }))
+      })) as Frame[]
 
       setFrames(updatedFrames)
 
-      await Promise.all(
-        updatedFrames.map((frame) =>
-          fetch(`/api/frames/${video.id}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              frameId: frame.id,
-              aiSuggestion: frame.aiSuggestion,
-              stepNumber: frame.stepNumber,
-            }),
-          })
-        )
-      )
+      // 3. Generate summary title based on returned native steps
+      const descriptions = updatedFrames.map(f => f.aiSuggestion || '')
+      const title = await generateDocumentTitle(descriptions)
 
-      const title = await generateDocumentTitle(frameDescriptions)
-      
-      const docContent = generateMarkdown(updatedFrames, title)
-      setGeneratedDoc(docContent)
+      setGeneratedTitle(title)
 
-      await fetch(`/api/analyze/${video.id}`, {
-        method: 'POST',
-      })
+      // 4. Sync Server Components with the DB
+      router.refresh()
     } catch (error) {
       console.error('Analysis failed:', error)
-      alert('Failed to analyze frames')
+      alert('Native Gemini processing failed. Check the console.')
     } finally {
       setIsAnalyzing(false)
     }
   }
 
-  const handleFrameEdit = async (frameId: string, value: string) => {
+  const handleFrameEdit = (frameId: string, value: string) => {
     const updatedFrames = frames.map((frame) =>
       frame.id === frameId ? { ...frame, userEdit: value } : frame
     )
-    setFrames(updatedFrames)
+    setFrames(updatedFrames) // Updates local UI and Document Preview dynamically
 
-    await fetch(`/api/frames/${video.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        frameId,
-        userEdit: value,
-      }),
-    })
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+
+    timeoutRef.current = setTimeout(async () => {
+      await fetch(`/api/frames/${video.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          frameId,
+          userEdit: value,
+        }),
+      })
+    }, 600) // 600ms debounce
   }
 
   const handleTranslate = async () => {
@@ -142,40 +175,6 @@ export function VideoEditor({ video }: VideoEditorProps) {
     }
   }
 
-  const formatTimestamp = (seconds: number) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins}:${secs.toString().padStart(2, '0')}`
-  }
-
-  const generateMarkdown = (frames: Frame[], title: string) => {
-    const steps = frames
-      .filter((f) => f.stepNumber)
-      .map((frame) => {
-        const description = frame.userEdit || frame.aiSuggestion || 'No description'
-        return `### Step ${frame.stepNumber}: ${formatTimestamp(frame.timestamp)}
-
-![Frame at ${formatTimestamp(frame.timestamp)}](${frame.imageUrl})
-
-${description}
-`
-      })
-      .join('\n')
-
-    return `# How to ${title}
-
-## Overview
-This guide will walk you through the steps shown in the tutorial video.
-
-## Steps
-
-${steps}
-
----
-*Generated with HowToDoX*
-`
-  }
-
   const languages = [
     { code: 'en', name: 'English' },
     { code: 'es', name: 'Spanish' },
@@ -189,159 +188,162 @@ ${steps}
   ]
   const displayDoc = translatedDoc || generatedDoc
 
+  const [activeTab, setActiveTab] = useState<'editor' | 'document'>('editor')
+
   return (
-    <div className="grid lg:grid-cols-3 gap-6">
-      <div className="lg:col-span-2 space-y-6">
-        {/* Video Player */}
-        <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
-          <div className="aspect-video bg-black relative">
-            <video
-              src={video.secureUrl}
-              className="w-full h-full"
-              controls
-            />
-          </div>
-
-          <div className="p-5 border-t border-white/10">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <h2 className="font-semibold">Timeline</h2>
-                <span className="text-xs text-zinc-500">{frames.length} frames</span>
-              </div>
-              <button
-                onClick={handleAnalyze}
-                disabled={isAnalyzing}
-                className="group flex items-center gap-2 bg-gradient-to-r from-orange-500 to-amber-600 text-white px-5 py-2.5 rounded-xl font-medium hover:from-orange-400 hover:to-amber-500 transition-all shadow-lg shadow-orange-500/20 disabled:opacity-50"
-              >
-                {isAnalyzing ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Zap className="w-4 h-4" />
-                )}
-                {isAnalyzing ? 'Analyzing...' : 'AI Analyze'}
-              </button>
-            </div>
-
-            <div className="flex gap-3 overflow-x-auto pb-2">
-              {frames.map((frame, index) => (
-                <button
-                  key={frame.id}
-                  onClick={() => setCurrentFrameIndex(index)}
-                  className={`group flex-shrink-0 w-28 rounded-xl overflow-hidden border-2 transition-all ${
-                    index === currentFrameIndex
-                      ? 'border-orange-500 shadow-lg shadow-orange-500/20'
-                      : 'border-transparent hover:border-white/20'
-                  }`}
-                >
-                  <img
-                    src={frame.imageUrl}
-                    alt={`Frame at ${formatTimestamp(frame.timestamp)}`}
-                    className="w-full h-16 object-cover"
-                  />
-                  <div className={`text-xs px-2 py-1.5 text-center flex items-center justify-center gap-1 ${
-                    index === currentFrameIndex
-                      ? 'bg-orange-500/20 text-orange-400'
-                      : 'bg-zinc-900 text-zinc-400'
-                  }`}>
-                    {frame.stepNumber && (
-                      <span className="w-4 h-4 rounded-full bg-orange-500/30 text-[10px] flex items-center justify-center">{frame.stepNumber}</span>
-                    )}
-                    {formatTimestamp(frame.timestamp)}
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
+    <div className="max-w-5xl mx-auto space-y-6">
+      {/* Video Player (Always Visible) */}
+      <div className="bg-[#050505] border border-border rounded-none overflow-hidden shadow-[4px_4px_0px_#2F2F2F]">
+        <div className="aspect-video bg-black relative border-b border-border">
+          <video
+            src={video.secureUrl}
+            className="w-full h-full"
+            controls
+          />
         </div>
 
-        {/* Frame Editor */}
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-amber-600 rounded-xl flex items-center justify-center">
-                <Edit3 className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h2 className="font-semibold">
-                  Step {currentFrame?.stepNumber || currentFrameIndex + 1}
-                </h2>
-                <span className="text-sm text-zinc-500">
-                  {currentFrame && formatTimestamp(currentFrame.timestamp)}
-                </span>
-              </div>
+        {frames.length === 0 ? (
+          <div className="p-12 text-center border-t border-border bg-[#0A0A0A]">
+            <div className="w-16 h-16 mx-auto mb-6 border border-border bg-[#050505] shadow-[6px_6px_0px_#2F2F2F] flex items-center justify-center">
+              <Sparkles className="w-8 h-8 text-accent" />
             </div>
+            <h3 className="font-display font-bold uppercase tracking-wide text-2xl mb-4 text-white">Extract Steps Automatically</h3>
+            <p className="text-zinc-400 font-sans text-sm mb-10 max-w-lg mx-auto leading-relaxed">
+              Let AI watch your video file and natively understand the audio and visual actions. We will automatically generate a step-by-step tutorial with precise timestamps and instructions.
+            </p>
+            <button
+              onClick={handleAnalyze}
+              disabled={isAnalyzing}
+              className="inline-flex items-center justify-center gap-3 bg-accent text-black px-10 py-5 font-sans font-bold uppercase tracking-wider hover:bg-white transition-all shadow-[8px_8px_0px_white] hover:shadow-[2px_2px_0px_white] hover:translate-x-[6px] hover:translate-y-[6px] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isAnalyzing ? (
+                <Loader2 className="w-6 h-6 animate-spin text-black" />
+              ) : (
+                <Zap className="w-6 h-6 text-black" />
+              )}
+              {isAnalyzing ? 'Analyzing Entire Video...' : 'Analyze Video with AI'}
+            </button>
           </div>
-
-          {currentFrame && (
-            <div className="grid md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <img
-                  src={currentFrame.imageUrl}
-                  alt={`Frame at ${formatTimestamp(currentFrame.timestamp)}`}
-                  className="w-full rounded-xl border border-white/10"
-                />
-              </div>
-              <div className="space-y-4">
-                {currentFrame.aiSuggestion && (
-                  <div>
-                    <label className="flex items-center gap-2 text-sm font-medium text-zinc-400 mb-2">
-                      <Sparkles className="w-4 h-4 text-orange-500" />
-                      AI Suggestion
-                    </label>
-                    <div className="p-4 bg-orange-500/10 rounded-xl text-sm text-zinc-300 border border-orange-500/20">
-                      {currentFrame.aiSuggestion}
-                    </div>
-                  </div>
-                )}
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-zinc-400 mb-2">
-                    <Edit3 className="w-4 h-4" />
-                    Your Description
-                  </label>
-                  <textarea
-                    value={currentFrame.userEdit || ''}
-                    onChange={(e) => handleFrameEdit(currentFrame.id, e.target.value)}
-                    placeholder="Describe what's happening in this step..."
-                    className="w-full h-40 p-4 bg-white/5 border border-white/10 rounded-xl resize-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-zinc-600"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+        ) : null}
       </div>
 
-      {/* Document Preview */}
-      <div className="space-y-6">
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 sticky top-24">
-          <h2 className="font-semibold mb-4 flex items-center gap-2">
-            <Download className="w-5 h-5 text-orange-500" />
-            Document Preview
-          </h2>
-          
-          {!generatedDoc ? (
-            <div className="text-center py-8">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-white/5 flex items-center justify-center">
-                <Sparkles className="w-8 h-8 text-zinc-600" />
-              </div>
-              <p className="text-zinc-500 text-sm">
-                Click "AI Analyze" to generate your how-to document
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 p-3 bg-green-500/10 rounded-xl border border-green-500/20">
-                <Check className="w-4 h-4 text-green-500" />
-                <span className="text-sm text-green-400">Document Generated</span>
+      {frames.length > 0 && (
+        <div className="space-y-6">
+          {/* Tabs Row */}
+          <div className="flex bg-[#050505] border border-border p-2 shadow-[4px_4px_0px_#2F2F2F] gap-2">
+            <button
+              onClick={() => setActiveTab('editor')}
+              className={`flex-1 py-3 font-sans font-bold uppercase tracking-wider text-sm transition-all ${activeTab === 'editor'
+                ? 'bg-accent text-black shadow-[2px_2px_0px_white] translate-x-[-1px] translate-y-[-1px]'
+                : 'bg-[#0A0A0A] text-zinc-400 border border-transparent hover:border-border hover:text-white'
+                }`}
+            >
+              Step Editor
+            </button>
+            <button
+              onClick={() => setActiveTab('document')}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 font-sans font-bold uppercase tracking-wider text-sm transition-all ${activeTab === 'document'
+                ? 'bg-accent text-black shadow-[2px_2px_0px_white] translate-x-[-1px] translate-y-[-1px]'
+                : 'bg-[#0A0A0A] text-zinc-400 border border-transparent hover:border-border hover:text-white'
+                }`}
+            >
+              <Download className="w-4 h-4" />
+              Full Document
+            </button>
+          </div>
+
+          {/* Tab Content */}
+          {activeTab === 'editor' ? (
+            <div className="space-y-6">
+              {/* Timeline Reel */}
+              <div className="bg-[#050505] border border-border rounded-none p-5 shadow-[4px_4px_0px_#2F2F2F]">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <h2 className="font-display font-bold uppercase tracking-tight text-xl">Timeline</h2>
+                    <span className="font-sans font-bold text-xs uppercase tracking-wider text-zinc-500">{frames.length} frames</span>
+                  </div>
+                  <button
+                    onClick={handleAnalyze}
+                    disabled={isAnalyzing}
+                    className="group flex items-center justify-center gap-2 bg-[#0A0A0A] border border-border text-white px-5 py-2.5 font-sans font-bold uppercase tracking-wider hover:bg-accent hover:text-black transition-all shadow-[4px_4px_0px_#2F2F2F] hover:shadow-[2px_2px_0px_var(--accent)] hover:translate-x-[2px] hover:translate-y-[2px] disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isAnalyzing ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-4 h-4" />
+                    )}
+                    {isAnalyzing ? 'Re-Analyzing...' : 'Re-Analyze'}
+                  </button>
+                </div>
+
+                <div className="flex gap-3 overflow-x-auto pb-2 custom-scrollbar">
+                  {frames.map((frame, index) => (
+                    <button
+                      key={frame.id}
+                      onClick={() => setCurrentFrameIndex(index)}
+                      className={`group flex-shrink-0 w-32 rounded-none overflow-hidden border transition-all ${index === currentFrameIndex
+                        ? 'border-accent shadow-[4px_4px_0px_var(--accent)] translate-x-[-2px] translate-y-[-2px]'
+                        : 'border-border hover:border-zinc-400 opacity-70 hover:opacity-100'
+                        }`}
+                    >
+                      <img
+                        src={frame.imageUrl}
+                        alt={`Frame at ${formatTimestamp(frame.timestamp)}`}
+                        className="w-full h-20 object-cover border-b border-border"
+                      />
+                      <div className={`text-xs px-2 py-1.5 font-sans font-bold uppercase tracking-wider text-center flex items-center justify-center gap-1 ${index === currentFrameIndex
+                        ? 'bg-[#0A0A0A] text-accent'
+                        : 'bg-[#050505] text-zinc-500'
+                        }`}>
+                        {frame.stepNumber !== null && (
+                          <span className="w-4 h-4 rounded-none border border-current opacity-80 text-[10px] flex items-center justify-center">{frame.stepNumber}</span>
+                        )}
+                        {formatTimestamp(frame.timestamp)}
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-zinc-400">Translate to</label>
-                <div className="flex gap-2">
+              {/* Minimal Description Editor */}
+              {currentFrame && (
+                <div className="bg-[#050505] border border-border rounded-none p-6 shadow-[4px_4px_0px_#2F2F2F]">
+                  <label className="flex items-center justify-between font-sans font-bold text-xs uppercase tracking-wider text-zinc-400 mb-3">
+                    <div className="flex items-center gap-2">
+                      <Edit3 className="w-4 h-4 text-accent" />
+                      Step {currentFrame.stepNumber || currentFrameIndex + 1} Description
+                    </div>
+                    <span>{formatTimestamp(currentFrame.timestamp)}</span>
+                  </label>
+                  <textarea
+                    value={currentFrame.userEdit ?? currentFrame.aiSuggestion ?? ''}
+                    onChange={(e) => handleFrameEdit(currentFrame.id, e.target.value)}
+                    placeholder="Describe what's happening in this step..."
+                    className="w-full h-32 p-4 bg-[#0A0A0A] border border-border rounded-none resize-none focus:ring-0 focus:outline-none focus:border-accent text-white placeholder-zinc-600 font-sans shadow-[4px_4px_0px_#2F2F2F] transition-colors text-lg leading-relaxed"
+                  />
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="bg-[#050505] border border-border rounded-none p-6 shadow-[4px_4px_0px_#2F2F2F] min-h-[500px]">
+              <div className="flex items-center justify-between border-b border-border pb-4 mb-4">
+                <h2 className="font-display font-bold uppercase tracking-tight text-xl flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-accent" />
+                  Generated Document
+                </h2>
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-green-500/10 border border-green-500/20 text-green-400 font-sans text-xs uppercase font-bold tracking-wider">
+                  <Check className="w-4 h-4" />
+                  Generated
+                </div>
+              </div>
+
+              <div className="space-y-3 mb-6">
+                <label className="font-sans font-bold text-xs uppercase tracking-wider text-zinc-400">Translate to</label>
+                <div className="flex gap-2 max-w-sm">
                   <select
                     value={selectedLanguage}
                     onChange={(e) => setSelectedLanguage(e.target.value)}
-                    className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white"
+                    className="flex-1 bg-[#0A0A0A] border border-border rounded-none px-4 py-2.5 font-sans text-sm text-white focus:outline-none focus:border-accent"
                   >
                     {languages.map((lang) => (
                       <option key={lang.code} value={lang.code} className="bg-zinc-900">
@@ -352,7 +354,7 @@ ${steps}
                   <button
                     onClick={handleTranslate}
                     disabled={isTranslating}
-                    className="flex items-center gap-2 bg-white/10 border border-white/10 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-white/20 transition-colors disabled:opacity-50"
+                    className="flex items-center justify-center w-12 border border-border bg-[#0A0A0A] hover:bg-white hover:text-black transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isTranslating ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -364,16 +366,14 @@ ${steps}
               </div>
 
               {translatedDoc && (
-                <div className="flex items-center gap-2 p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
-                  <Check className="w-4 h-4 text-blue-500" />
-                  <span className="text-sm text-blue-400">
-                    Translated to {languages.find(l => l.code === selectedLanguage)?.name}
-                  </span>
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-accent/10 border border-accent/20 text-accent font-sans text-xs uppercase font-bold tracking-wider mb-4 w-max">
+                  <Check className="w-4 h-4" />
+                  Translated: {languages.find(l => l.code === selectedLanguage)?.name}
                 </div>
               )}
 
-              <div className="border-t border-white/10 pt-4">
-                <pre className="text-sm whitespace-pre-wrap text-zinc-400 max-h-80 overflow-y-auto font-mono">
+              <div className="border border-border">
+                <pre className="text-base leading-relaxed whitespace-pre-wrap text-zinc-300 max-h-[600px] overflow-y-auto font-sans bg-[#0A0A0A] p-6 shadow-inner custom-scrollbar">
                   {displayDoc}
                 </pre>
               </div>
@@ -384,18 +384,18 @@ ${steps}
                   const url = URL.createObjectURL(blob)
                   const a = document.createElement('a')
                   a.href = url
-                  a.download = `${video.title}.md`
+                  a.download = `${generatedTitle || 'document'}.md`
                   a.click()
                 }}
-                className="flex items-center justify-center gap-2 w-full bg-gradient-to-r from-orange-500 to-amber-600 text-white px-4 py-3 rounded-xl font-medium hover:from-orange-400 hover:to-amber-500 transition-all shadow-lg shadow-orange-500/20"
+                className="flex items-center justify-center gap-2 w-full mt-6 bg-accent text-black px-6 py-4 font-sans font-bold uppercase tracking-wider hover:bg-white transition-all shadow-[4px_4px_0px_white] hover:shadow-[2px_2px_0px_white] hover:translate-x-[2px] hover:translate-y-[2px]"
               >
-                <Download className="w-4 h-4" />
+                <Download className="w-5 h-5" />
                 Download Markdown
               </button>
             </div>
           )}
         </div>
-      </div>
+      )}
     </div>
   )
 }

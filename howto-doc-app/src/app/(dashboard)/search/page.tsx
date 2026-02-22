@@ -59,7 +59,7 @@ export default function SearchPage() {
             <div className="mb-8 pb-4 border-b border-border">
                 <h1 className="text-4xl font-display font-bold mb-2 uppercase tracking-tight">Search Guides</h1>
                 <p className="text-zinc-400 font-sans">
-                    Find "how to do X" guides created by the community.
+                    Find &quot;how to do X&quot; guides created by the community.
                 </p>
             </div>
 
@@ -94,7 +94,7 @@ export default function SearchPage() {
                     </div>
                     <h3 className="text-2xl font-display font-bold mb-3 uppercase tracking-wide">No Results Found</h3>
                     <p className="text-zinc-500 font-sans max-w-sm mx-auto">
-                        We couldn't find any guides matching "{query}". Try a different search term.
+                        We couldn&apos;t find any guides matching &quot;{query}&quot;. Try a different search term.
                     </p>
                 </div>
             ) : (
@@ -102,7 +102,7 @@ export default function SearchPage() {
                     {results.map((video) => (
                         <Link
                             key={video.id}
-                            href={`/video/${video.id}/edit`}
+                            href={`/video/${video.id}`}
                             className="group bg-background border border-border p-5 hover:border-accent transition-all shadow-[4px_4px_0px_#2F2F2F] hover:shadow-[4px_4px_0px_var(--accent)] hover:-translate-y-1 block relative"
                         >
                             <div className="aspect-video bg-[#050505] border border-border mb-4 overflow-hidden relative">

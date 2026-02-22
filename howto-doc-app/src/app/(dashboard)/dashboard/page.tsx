@@ -149,7 +149,7 @@ export default function DashboardPage() {
           {videos.map((video) => (
             <Link
               key={video.id}
-              href={`/video/${video.id}/edit`}
+              href={`/video/${video.id}`}
               className="group bg-background border border-border p-5 hover:border-accent transition-all shadow-[4px_4px_0px_#2F2F2F] hover:shadow-[4px_4px_0px_var(--accent)] hover:-translate-y-1 block relative"
             >
               <div className="aspect-video bg-[#050505] border border-border mb-4 overflow-hidden relative">

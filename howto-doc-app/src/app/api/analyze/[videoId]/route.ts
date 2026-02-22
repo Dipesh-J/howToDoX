@@ -40,7 +40,7 @@ export async function POST(
       where: { videoId },
       create: {
         videoId,
-        content: JSON.stringify(video.frames.map((f: any) => ({
+        content: JSON.stringify(video.frames.map((f: { timestamp: number, imageUrl: string, aiSuggestion: string | null }) => ({
           id: f.id,
           timestamp: f.timestamp,
           aiSuggestion: f.aiSuggestion,
@@ -50,7 +50,7 @@ export async function POST(
         status: 'DRAFT',
       },
       update: {
-        content: JSON.stringify(video.frames.map((f: any) => ({
+        content: JSON.stringify(video.frames.map((f: { timestamp: number, imageUrl: string, aiSuggestion: string | null }) => ({
           id: f.id,
           timestamp: f.timestamp,
           aiSuggestion: f.aiSuggestion,
