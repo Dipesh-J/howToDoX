@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { Sparkles, Loader2, Check, Globe, Download, Edit3, Zap, FileText } from 'lucide-react'
+import { Sparkles, Loader2, Check, Globe, Download, Edit3, Zap, FileText, Eye, Code2 } from 'lucide-react'
+import { MarkdownRenderer } from '@/components/markdown-renderer'
 import { analyzeVideoMultimodal, generateDocumentTitle } from '@/lib/gemini'
 import { useRouter } from 'next/navigation'
 
@@ -69,6 +70,8 @@ export function VideoEditor({ video }: VideoEditorProps) {
   const [selectedLanguage, setSelectedLanguage] = useState('en')
   const [generatedTitle, setGeneratedTitle] = useState(video.title)
   const [translatedDoc, setTranslatedDoc] = useState('')
+  const [markdownMode, setMarkdownMode] = useState<'edit' | 'preview'>('preview')
+  const [customMarkdown, setCustomMarkdown] = useState<string | null>(null)
 
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -79,6 +82,10 @@ export function VideoEditor({ video }: VideoEditorProps) {
     if (!hasAnalyzed) return ''
     return generateMarkdown(frames, generatedTitle)
   }, [frames, hasAnalyzed, generatedTitle])
+
+  // The markdown the owner sees/edits: custom overrides generated
+  const activeMarkdown = customMarkdown ?? generatedDoc
+  const displayDoc = translatedDoc || activeMarkdown
 
   const handleAnalyze = async () => {
     setIsAnalyzing(true)
@@ -186,8 +193,6 @@ export function VideoEditor({ video }: VideoEditorProps) {
     { code: 'ja', name: 'Japanese' },
     { code: 'ko', name: 'Korean' },
   ]
-  const displayDoc = translatedDoc || generatedDoc
-
   const [activeTab, setActiveTab] = useState<'editor' | 'document'>('editor')
 
   return (
@@ -325,25 +330,70 @@ export function VideoEditor({ video }: VideoEditorProps) {
               )}
             </div>
           ) : (
-            <div className="bg-[#050505] border border-border rounded-none p-6 shadow-[4px_4px_0px_#2F2F2F] min-h-[500px]">
-              <div className="flex items-center justify-between border-b border-border pb-4 mb-4">
+            <div className="bg-[#050505] border border-border rounded-none shadow-[4px_4px_0px_#2F2F2F] min-h-[500px] overflow-hidden">
+              {/* Document header */}
+              <div className="flex items-center justify-between border-b border-border px-6 py-4">
                 <h2 className="font-display font-bold uppercase tracking-tight text-xl flex items-center gap-2">
                   <FileText className="w-5 h-5 text-accent" />
-                  Generated Document
+                  How to {generatedTitle}
                 </h2>
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-green-500/10 border border-green-500/20 text-green-400 font-sans text-xs uppercase font-bold tracking-wider">
-                  <Check className="w-4 h-4" />
-                  Generated
+                <div className="flex items-center gap-2">
+                  {/* Edit / Preview Toggle */}
+                  <div className="flex border border-border bg-[#0A0A0A]">
+                    <button
+                      onClick={() => setMarkdownMode('preview')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 font-sans text-xs uppercase font-bold tracking-wider transition-all ${markdownMode === 'preview'
+                          ? 'bg-accent text-black'
+                          : 'text-zinc-400 hover:text-white'
+                        }`}
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      Preview
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (markdownMode === 'preview') {
+                          // First time switching to edit: populate with current generated content
+                          if (customMarkdown === null) setCustomMarkdown(activeMarkdown)
+                          setMarkdownMode('edit')
+                        } else {
+                          setMarkdownMode('preview')
+                        }
+                      }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 font-sans text-xs uppercase font-bold tracking-wider transition-all ${markdownMode === 'edit'
+                          ? 'bg-accent text-black'
+                          : 'text-zinc-400 hover:text-white'
+                        }`}
+                    >
+                      <Code2 className="w-3.5 h-3.5" />
+                      Edit
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const blob = new Blob([displayDoc], { type: 'text/markdown' })
+                      const url = URL.createObjectURL(blob)
+                      const a = document.createElement('a')
+                      a.href = url
+                      a.download = `${generatedTitle || 'document'}.md`
+                      a.click()
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 border border-border text-zinc-400 hover:border-accent hover:text-accent transition-colors font-sans text-xs uppercase font-bold tracking-wider"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Export
+                  </button>
                 </div>
               </div>
 
-              <div className="space-y-3 mb-6">
-                <label className="font-sans font-bold text-xs uppercase tracking-wider text-zinc-400">Translate to</label>
-                <div className="flex gap-2 max-w-sm">
+              {/* Translate row */}
+              <div className="flex items-center gap-3 px-6 py-3 border-b border-border bg-[#0A0A0A]">
+                <label className="font-sans font-bold text-xs uppercase tracking-wider text-zinc-500 whitespace-nowrap">Translate to</label>
+                <div className="flex gap-2">
                   <select
                     value={selectedLanguage}
                     onChange={(e) => setSelectedLanguage(e.target.value)}
-                    className="flex-1 bg-[#0A0A0A] border border-border rounded-none px-4 py-2.5 font-sans text-sm text-white focus:outline-none focus:border-accent"
+                    className="bg-[#050505] border border-border rounded-none px-3 py-1.5 font-sans text-sm text-white focus:outline-none focus:border-accent"
                   >
                     {languages.map((lang) => (
                       <option key={lang.code} value={lang.code} className="bg-zinc-900">
@@ -354,44 +404,34 @@ export function VideoEditor({ video }: VideoEditorProps) {
                   <button
                     onClick={handleTranslate}
                     disabled={isTranslating}
-                    className="flex items-center justify-center w-12 border border-border bg-[#0A0A0A] hover:bg-white hover:text-black transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center justify-center gap-2 px-4 py-1.5 border border-border bg-[#050505] hover:border-accent hover:text-accent transition-colors font-sans text-xs uppercase font-bold tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isTranslating ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Globe className="w-4 h-4" />
-                    )}
+                    {isTranslating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Globe className="w-3.5 h-3.5" />}
+                    {isTranslating ? 'Translating...' : 'Translate'}
                   </button>
+                  {translatedDoc && (
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-accent/10 border border-accent/20 text-accent font-sans text-xs uppercase font-bold tracking-wider">
+                      <Check className="w-3.5 h-3.5" />
+                      {languages.find(l => l.code === selectedLanguage)?.name}
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {translatedDoc && (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-accent/10 border border-accent/20 text-accent font-sans text-xs uppercase font-bold tracking-wider mb-4 w-max">
-                  <Check className="w-4 h-4" />
-                  Translated: {languages.find(l => l.code === selectedLanguage)?.name}
+              {/* Main content area */}
+              {markdownMode === 'edit' ? (
+                <textarea
+                  value={customMarkdown ?? activeMarkdown}
+                  onChange={(e) => setCustomMarkdown(e.target.value)}
+                  className="w-full min-h-[600px] p-6 bg-[#050505] focus:outline-none text-zinc-200 font-mono text-sm leading-relaxed resize-none border-none"
+                  placeholder="Your markdown document..."
+                  spellCheck={false}
+                />
+              ) : (
+                <div className="p-8 max-w-3xl">
+                  <MarkdownRenderer content={displayDoc} />
                 </div>
               )}
-
-              <div className="border border-border">
-                <pre className="text-base leading-relaxed whitespace-pre-wrap text-zinc-300 max-h-[600px] overflow-y-auto font-sans bg-[#0A0A0A] p-6 shadow-inner custom-scrollbar">
-                  {displayDoc}
-                </pre>
-              </div>
-
-              <button
-                onClick={() => {
-                  const blob = new Blob([displayDoc], { type: 'text/markdown' })
-                  const url = URL.createObjectURL(blob)
-                  const a = document.createElement('a')
-                  a.href = url
-                  a.download = `${generatedTitle || 'document'}.md`
-                  a.click()
-                }}
-                className="flex items-center justify-center gap-2 w-full mt-6 bg-accent text-black px-6 py-4 font-sans font-bold uppercase tracking-wider hover:bg-white transition-all shadow-[4px_4px_0px_white] hover:shadow-[2px_2px_0px_white] hover:translate-x-[2px] hover:translate-y-[2px]"
-              >
-                <Download className="w-5 h-5" />
-                Download Markdown
-              </button>
             </div>
           )}
         </div>

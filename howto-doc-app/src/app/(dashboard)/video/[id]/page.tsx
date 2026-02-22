@@ -1,30 +1,18 @@
 import { prisma } from '@/lib/prisma'
 import { auth } from '@clerk/nextjs/server'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Loader2, CheckCircle, FileText } from 'lucide-react'
+import { ArrowLeft, Loader2, CheckCircle, FileText, User, Clock } from 'lucide-react'
 import { VideoEditor } from './video-editor'
 import { InlineTitle } from './inline-title'
+import { MarkdownRenderer } from '@/components/markdown-renderer'
 
-export default async function VideoEditPage({
+export default async function VideoPage({
   params,
 }: {
   params: Promise<{ id: string }>
 }) {
   const { userId } = await auth()
   const { id } = await params
-
-  if (!userId) {
-    redirect('/sign-in')
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { clerkId: userId },
-  })
-
-  if (!user) {
-    redirect('/sign-in')
-  }
 
   const video = await prisma.video.findUnique({
     where: { id },
@@ -34,11 +22,24 @@ export default async function VideoEditPage({
       },
       transcript: true,
       documents: true,
+      user: true,
     },
   })
 
-  if (!video || video.userId !== user.id) {
-    redirect('/dashboard')
+  if (!video) {
+    return (
+      <div className="text-center py-20">
+        <h1 className="font-display text-2xl uppercase">Video not found</h1>
+        <Link href="/dashboard" className="text-accent mt-4 inline-block">Back to dashboard</Link>
+      </div>
+    )
+  }
+
+  // Determine if the current user is the owner
+  let isOwner = false
+  if (userId) {
+    const currentUser = await prisma.user.findUnique({ where: { clerkId: userId } })
+    isOwner = currentUser?.id === video.userId
   }
 
   const getStatusBadge = (status: string) => {
@@ -74,6 +75,82 @@ export default async function VideoEditPage({
     }
   }
 
+  // Build markdown for public view from frames
+  const publicMarkdown = video.frames.length > 0
+    ? `# How to ${video.title}\n\n## Overview\nThis guide will walk you through the steps shown in the tutorial video.\n\n## Steps\n\n${video.frames.map((frame, index) => {
+      const description = frame.userEdit || frame.aiSuggestion || 'No description'
+      const mins = Math.floor(frame.timestamp / 60)
+      const secs = frame.timestamp % 60
+      const ts = `${mins}:${secs.toString().padStart(2, '0')}`
+      return `### Step ${frame.stepNumber || index + 1}: ${ts}\n\n![Frame at ${ts}](${frame.imageUrl})\n\n${description}\n`
+    }).join('\n')
+    }\n\n---\n*Generated with HowToDoX*`
+    : ''
+
+  // ─── PUBLIC (non-owner) VIEW ───────────────────────────────────────────────
+  if (!isOwner) {
+    return (
+      <div className="animate-slide-up max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="mb-8 pb-4 border-b border-border flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link
+              href="/search"
+              className="flex items-center justify-center w-10 h-10 border border-border bg-[#050505] hover:bg-[#2F2F2F] hover:border-accent text-zinc-400 hover:text-white transition-all shadow-[4px_4px_0px_#2F2F2F] hover:shadow-[2px_2px_0px_#EBFF00] hover:translate-x-[2px] hover:translate-y-[2px]"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </Link>
+            <div>
+              <h1 className="text-3xl font-display font-bold uppercase tracking-tight">
+                <span className="text-accent opacity-80">How to do / </span>{video.title}
+              </h1>
+              <div className="flex items-center gap-3 mt-1">
+                <div className="flex items-center gap-1.5 text-zinc-500 font-sans text-xs font-bold uppercase tracking-wider">
+                  <User className="w-3 h-3" />
+                  {video.user.name || 'Anonymous'}
+                </div>
+                <div className="flex items-center gap-1.5 text-zinc-500 font-sans text-xs font-bold uppercase tracking-wider">
+                  <Clock className="w-3 h-3" />
+                  {new Date(video.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </div>
+              </div>
+            </div>
+          </div>
+          {getStatusBadge(video.status)}
+        </div>
+
+        {/* Video Player */}
+        <div className="bg-[#050505] border border-border overflow-hidden shadow-[8px_8px_0px_#2F2F2F] mb-8">
+          <div className="aspect-video bg-black">
+            <video
+              src={video.secureUrl}
+              className="w-full h-full"
+              controls
+            />
+          </div>
+        </div>
+
+        {/* Document — read-only rendered */}
+        {video.frames.length > 0 ? (
+          <div className="border border-border bg-[#050505] shadow-[8px_8px_0px_#2F2F2F]">
+            <div className="border-b border-border px-6 py-4 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-accent" />
+              <span className="font-sans font-bold text-xs uppercase tracking-wider text-zinc-400">Guide Document</span>
+            </div>
+            <div className="p-8 max-w-3xl">
+              <MarkdownRenderer content={publicMarkdown} />
+            </div>
+          </div>
+        ) : (
+          <div className="border border-border bg-[#050505] p-12 text-center shadow-[8px_8px_0px_#2F2F2F]">
+            <p className="text-zinc-500 font-sans text-sm uppercase tracking-wider font-bold">No guide generated yet.</p>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ─── OWNER VIEW ────────────────────────────────────────────────────────────
   return (
     <div className="animate-slide-up max-w-5xl mx-auto">
       <div className="mb-8 pb-4 border-b border-border flex items-center justify-between">
