@@ -1,0 +1,84 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum VideoStatus {
+  UPLOADED
+  PROCESSING
+  TRANSCRIBED
+  COMPLETED
+}
+
+enum TranscriptStatus {
+  DRAFT
+  COMPLETED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  email     String   @unique
+  name      String?
+  videos    Video[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Video {
+  id           String      @id @default(cuid())
+  title        String
+  cloudinaryId String      @unique
+  publicId     String
+  originalUrl  String
+  secureUrl    String
+  duration     Int         @default(0)
+  status       VideoStatus @default(UPLOADED)
+  userId       String
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  frames       Frame[]
+  transcript   Transcript?
+  documents    Document[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+model Frame {
+  id           String  @id @default(cuid())
+  videoId      String
+  video        Video   @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  timestamp    Int
+  imageUrl     String
+  aiSuggestion String?
+  userEdit     String?
+  stepNumber   Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Transcript {
+  id          String          @id @default(cuid())
+  videoId     String          @unique
+  video       Video           @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  content     Json
+  status      TranscriptStatus @default(DRAFT)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model Document {
+  id          String   @id @default(cuid())
+  videoId     String
+  video       Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  locale      String   @default("en")
+  content     String   @db.Text
+  title       String
+  generatedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([videoId, locale])
+}
