@@ -1,41 +1,107 @@
-# HowToDoX - Video to Step-by-Step Guide Generator
+<p align="center">
+  <img src="public/logo.png" alt="HowToDoX Logo" width="400" />
+</p>
 
-Transform any video tutorial into a detailed step-by-step guide with AI assistance. This MVP allows users to upload videos, have AI analyze the frames, manually edit transcriptions, generate documents, and translate them into multiple languages.
+<h1 align="center">HowToDoX</h1>
+
+<p align="center">
+  <strong>Turn any video into a step-by-step guide — instantly.</strong>
+</p>
+
+<p align="center">
+  <a href="#features"><img src="https://img.shields.io/badge/AI_Powered-Gemini_Vision-EBFF00?style=flat-square&labelColor=0A0A0A" alt="AI Powered" /></a>
+  <a href="#tech-stack"><img src="https://img.shields.io/badge/Built_With-Next.js_16-000000?style=flat-square&logo=nextdotjs&logoColor=white" alt="Next.js" /></a>
+  <a href="#features"><img src="https://img.shields.io/badge/Multilingual-50+_Languages-EBFF00?style=flat-square&labelColor=0A0A0A" alt="Multilingual" /></a>
+  <img src="https://img.shields.io/badge/License-MIT-EBFF00?style=flat-square&labelColor=0A0A0A" alt="License" />
+</p>
+
+---
+
+## What is HowToDoX?
+
+**HowToDoX** is an AI-powered documentation tool that transforms video tutorials into clear, shareable, step-by-step guides with screenshots and text instructions.
+
+Record your screen or upload a video → AI analyzes each frame → get a polished, translatable document. No more tedious manual documentation.
+
+### The Problem
+
+Creating step-by-step documentation from tutorials is painfully manual — screenshot, write, screenshot, write, repeat. Teams waste hours documenting processes that could be captured in a quick screen recording.
+
+### The Solution
+
+HowToDoX automates the entire pipeline:
+
+1. **Upload** a video tutorial (or record directly in-app)
+2. **AI extracts** key frames and generates action descriptions using Google Gemini Vision
+3. **Refine** the steps in a visual editor with frame thumbnails
+4. **Generate** a downloadable Markdown document
+5. **Translate** into 50+ languages with one click  
+6. **Share** publicly with anyone via a direct link 
+
+---
+
+## Features
+
+| Feature | Description |
+|---|---|
+| 🎥 **Video Upload** | Drag-and-drop upload with Cloudinary storage. Supports any video format. |
+| 🔴 **Screen Recording** | Record your screen directly from the app — no external tools needed. |
+| 🤖 **AI Frame Analysis** | Google Gemini Vision extracts key frames and generates step-by-step descriptions automatically. |
+| ✏️ **Visual Editor** | Timeline view with frame thumbnails. Edit AI suggestions, reorder steps, and refine descriptions. |
+| 📄 **Document Generation** | One-click Markdown document generation with embedded screenshots. |
+| 🌍 **Multilingual Translation** | Translate guides into 50+ languages using Lingo.dev SDK. |
+| 🔗 **Public Sharing** | Share generated guides publicly via a direct link. |
+| 🔍 **Search** | Full-text search across all your documents and guides. |
+| 🔐 **Authentication** | Secure sign-up/sign-in with Clerk. Protected dashboard routes. |
+
+---
 
 ## Tech Stack
 
-| Component | Technology |
-|-----------|------------|
-| Frontend | Next.js 15 (App Router) + Tailwind CSS |
-| Backend | Next.js API Routes |
-| Database | PostgreSQL (Supabase) + Prisma ORM |
-| Auth | Clerk |
-| Video Storage | Cloudinary |
-| AI Vision | Google Gemini Vision API |
-| Translation | Lingo.dev SDK |
+| Layer | Technology |
+|---|---|
+| **Framework** | [Next.js 16](https://nextjs.org/) (App Router) |
+| **Language** | TypeScript |
+| **Styling** | Tailwind CSS v4 |
+| **Database** | PostgreSQL (Supabase) + [Prisma ORM](https://www.prisma.io/) |
+| **Auth** | [Clerk](https://clerk.com/) |
+| **Video Storage** | [Cloudinary](https://cloudinary.com/) |
+| **AI Vision** | [Google Gemini Vision API](https://ai.google.dev/) |
+| **Translation** | [Lingo.dev SDK](https://lingo.dev/) |
+| **State Management** | [Zustand](https://zustand.docs.pmnd.rs/) |
+| **Fonts** | Unbounded (headings) + Space Mono (body) |
+
+---
 
 ## Getting Started
 
-### 1. Prerequisites
+### Prerequisites
 
-- Node.js 18+
-- npm or yarn
-- Supabase account (for PostgreSQL)
-- Clerk account (for authentication)
-- Cloudinary account (for video storage)
-- Google AI Studio account (for Gemini API)
-- Lingo.dev account (for translation)
+- **Node.js** 18 or higher
+- **npm** (or yarn/pnpm)
+- Accounts for the following services:
+  - [Supabase](https://supabase.com) — PostgreSQL database
+  - [Clerk](https://clerk.com) — Authentication
+  - [Cloudinary](https://cloudinary.com) — Video storage
+  - [Google AI Studio](https://aistudio.google.com/app/apikey) — Gemini API key
+  - [Lingo.dev](https://lingo.dev) — Translation API key
 
-### 2. Clone and Install
+### 1. Clone the Repository
 
 ```bash
-cd howto-doc-app
+git clone https://github.com/your-username/howToDoX.git
+cd howToDoX
+```
+
+### 2. Install Dependencies
+
+```bash
 npm install
 ```
 
-### 3. Environment Setup
+### 3. Configure Environment Variables
 
-Create a `.env` file in the project root with the following variables:
+Create a `.env` file in the project root:
 
 ```env
 # Database (Supabase PostgreSQL)
@@ -47,7 +113,7 @@ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_xxxxx
 CLERK_SECRET_KEY=sk_test_xxxxx
 
 # Cloudinary
-# Get keys from: https://cloudinary.com
+# Get keys from: https://cloudinary.com/console
 NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=your_cloud_name
 CLOUDINARY_API_KEY=your_api_key
 CLOUDINARY_API_SECRET=your_api_secret
@@ -61,16 +127,21 @@ GOOGLE_AI_API_KEY=your_gemini_key
 LINGODOTDEV_API_KEY=your_lingodotdev_key
 ```
 
-### 4. Database Setup
+### 4. Set Up the Database
 
 1. Create a new project on [Supabase](https://supabase.com)
-2. Create a PostgreSQL database
-3. Get your connection string from Supabase dashboard
-4. Update `DATABASE_URL` in `.env`
-5. Run Prisma migrations:
+2. Copy the connection string from the Supabase dashboard
+3. Update `DATABASE_URL` in your `.env` file
+4. Run Prisma migrations:
 
 ```bash
 npx prisma migrate dev --name init
+```
+
+5. *(Optional)* Open Prisma Studio to inspect your database:
+
+```bash
+npx prisma studio
 ```
 
 ### 5. Run the Development Server
@@ -81,97 +152,102 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-## Features
+---
 
-### Current MVP Features
+## How It Works
 
-1. **User Authentication**
-   - Sign up / Sign in with Clerk
-   - Protected dashboard routes
+```
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│   UPLOAD /   │     │  AI ANALYZES │     │    REFINE    │     │   GENERATE   │
+│   RECORD     │────▶│   FRAMES     │────▶│    & EDIT    │────▶│  & TRANSLATE │
+│   VIDEO      │     │  (Gemini)    │     │   STEPS      │     │   DOCUMENT   │
+└──────────────┘     └──────────────┘     └──────────────┘     └──────────────┘
+```
 
-2. **Video Upload**
-   - Drag and drop video upload
-   - Videos stored on Cloudinary
-   - Automatic frame extraction (10 frames)
+1. **Upload or Record** — Drop a video file or record your screen directly in the app.
+2. **AI Analysis** — Google Gemini Vision extracts key frames and generates instructional step descriptions for each frame.
+3. **Refine** — Use the visual timeline editor to edit descriptions, reorder steps, and perfect your guide.
+4. **Generate & Translate** — Export a Markdown document with embedded screenshots, then translate it into any of 50+ supported languages with one click.
 
-3. **AI-Powered Analysis**
-   - Google Gemini Vision analyzes each frame
-   - Generates action descriptions for each step
-   - Infers document title from frame content
-
-4. **Manual Transcript Editor**
-   - Timeline view with frame thumbnails
-   - Edit AI suggestions
-   - Review and refine step descriptions
-
-5. **Document Generation**
-   - Generate markdown from transcript
-   - Download as .md file
-   - Includes frame thumbnails
-
-6. **Multilingual Support**
-   - Translate documents to 9+ languages using Lingo.dev
-   - Store translations in database
+---
 
 ## Project Structure
 
 ```
-howto-doc-app/
+howToDoX/
+├── prisma/
+│   └── schema.prisma            # Database schema (User, Video, Frame, Transcript, Document)
+├── public/                      # Static assets
 ├── src/
 │   ├── app/
 │   │   ├── (auth)/              # Auth routes (sign-in, sign-up)
-│   │   │   ├── sign-in/
-│   │   │   └── sign-up/
-│   │   ├── (dashboard)/         # Protected dashboard routes
-│   │   │   ├── dashboard/       # Video list page
-│   │   │   └── video/[id]/      # Video editor
+│   │   ├── (dashboard)/         # Protected routes
+│   │   │   ├── dashboard/       # Video list & overview
+│   │   │   ├── record/          # Screen recording
+│   │   │   ├── search/          # Full-text search
+│   │   │   ├── upload/          # Video upload
+│   │   │   └── video/[id]/      # Video editor & document generation
 │   │   ├── api/                 # API routes
 │   │   │   ├── videos/          # Video CRUD
 │   │   │   ├── frames/          # Frame updates
 │   │   │   ├── analyze/         # AI analysis
 │   │   │   └── translate/       # Translation
-│   │   ├── layout.tsx
+│   │   ├── globals.css          # Design system & theme
+│   │   ├── layout.tsx           # Root layout
 │   │   └── page.tsx             # Landing page
-│   ├── components/               # React components
+│   ├── components/              # Reusable React components
+│   │   ├── editor/              # Editor components
+│   │   ├── ui/                  # UI primitives
+│   │   ├── video/               # Video-related components
+│   │   └── markdown-renderer.tsx
 │   ├── lib/
 │   │   ├── prisma.ts            # Database client
-│   │   ├── cloudinary.ts        # Video storage
-│   │   ├── gemini.ts            # AI vision
-│   │   └── lingod.ts            # Translation
-│   └── types/                    # TypeScript types
-├── prisma/
-│   └── schema.prisma             # Database schema
-└── .env                         # Environment variables
+│   │   ├── cloudinary.ts        # Video storage utilities
+│   │   ├── gemini.ts            # AI Vision integration
+│   │   └── lingod.ts            # Translation service
+│   └── types/                   # TypeScript type definitions
+├── .env                         # Environment variables (not committed)
+├── package.json
+└── tsconfig.json
 ```
+
+---
 
 ## API Routes
 
 | Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/videos` | GET | List user's videos |
-| `/api/videos` | POST | Upload new video |
-| `/api/frames/[videoId]` | POST | Update frame with AI suggestion |
-| `/api/frames/[videoId]` | PATCH | Update frame user edit |
-| `/api/analyze/[videoId]` | POST | Mark analysis as complete |
-| `/api/translate` | POST | Translate document content |
-| `/api/translate/[videoId]` | POST | Save translation to database |
+|---|---|---|
+| `/api/videos` | `GET` | List all videos for the authenticated user |
+| `/api/videos` | `POST` | Upload a new video |
+| `/api/frames/[videoId]` | `POST` | Update frame with AI suggestion |
+| `/api/frames/[videoId]` | `PATCH` | Update frame with user edits |
+| `/api/analyze/[videoId]` | `POST` | Trigger AI analysis / mark as complete |
+| `/api/translate` | `POST` | Translate document content |
+| `/api/translate/[videoId]` | `POST` | Save translation to database |
 
-## Known Issues
+---
 
-- Cloudinary free tier has 100MB video limit
-- Need valid API keys for all services to run properly
-- Lingo.dev SDK has Node.js dependencies (server-side translation only)
+## Scripts
 
-## Next Steps for Production
+| Command | Description |
+|---|---|
+| `npm run dev` | Start the development server |
+| `npm run build` | Build for production |
+| `npm start` | Start the production server |
+| `npm run lint` | Run ESLint |
+| `npx prisma migrate dev` | Run database migrations |
+| `npx prisma studio` | Open Prisma Studio (DB GUI) |
 
-1. Add rate limiting to API routes
-2. Implement video delete functionality
-3. Add support for longer videos
-4. Implement team/workspaces
-5. Add public document sharing
-6. Add PDF export
-7. Add more translation languages
+---
+
+## Known Limitations
+
+- Cloudinary free tier has a **100 MB** video upload limit
+- All external API keys must be valid for the app to function
+- Translation runs server-side only (Lingo.dev SDK has Node.js dependencies)
+
+---
 
 ## License
 
-MIT
+[MIT](LICENSE)
