@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useUser } from '@clerk/nextjs'
-import { Video, Clock, CheckCircle, Loader2, FileText, Upload as UploadIcon } from 'lucide-react'
+import { Video, Clock, CheckCircle, Loader2, FileText, Upload as UploadIcon, MoreVertical, Pencil, Trash2, X } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
@@ -20,6 +20,10 @@ export default function DashboardPage() {
   const router = useRouter()
   const [videos, setVideos] = useState<VideoItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<VideoItem | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (isLoaded && !isSignedIn) {
@@ -47,6 +51,32 @@ export default function DashboardPage() {
       fetchVideos()
     }
   }, [user?.id])
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenuId(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/videos/${deleteTarget.id}`, { method: 'DELETE' })
+      if (res.ok) {
+        setVideos((prev) => prev.filter((v) => v.id !== deleteTarget.id))
+      }
+    } catch (error) {
+      console.error('Failed to delete video:', error)
+    } finally {
+      setDeleting(false)
+      setDeleteTarget(null)
+    }
+  }
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -147,10 +177,10 @@ export default function DashboardPage() {
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {videos.map((video) => (
-            <Link
+            <div
               key={video.id}
-              href={`/video/${video.id}`}
-              className="group bg-background border border-border p-5 hover:border-accent transition-all shadow-[4px_4px_0px_#2F2F2F] hover:shadow-[4px_4px_0px_var(--accent)] hover:-translate-y-1 block relative"
+              onClick={() => router.push(`/video/${video.id}`)}
+              className="group bg-background border border-border p-5 hover:border-accent transition-all shadow-[4px_4px_0px_#2F2F2F] hover:shadow-[4px_4px_0px_var(--accent)] hover:-translate-y-1 block relative cursor-pointer"
             >
               <div className="aspect-video bg-[#050505] border border-border mb-4 overflow-hidden relative">
                 <div className="absolute inset-0 flex items-center justify-center group-hover:bg-accent/5 transition-colors">
@@ -158,6 +188,44 @@ export default function DashboardPage() {
                 </div>
                 <div className="absolute bottom-0 right-0 px-2 py-1 bg-black border-t border-l border-border text-xs font-sans font-bold uppercase tracking-widest text-white">
                   {formatDuration(video.duration)}
+                </div>
+                {/* Ellipsis Menu Button */}
+                <div className="absolute top-2 right-2 z-10" ref={openMenuId === video.id ? menuRef : null}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setOpenMenuId(openMenuId === video.id ? null : video.id)
+                    }}
+                    className="w-8 h-8 flex items-center justify-center bg-black/70 border border-border hover:border-accent text-zinc-400 hover:text-accent transition-all"
+                  >
+                    <MoreVertical className="w-4 h-4" />
+                  </button>
+                  {openMenuId === video.id && (
+                    <div className="absolute top-full right-0 mt-1 w-40 bg-[#111111] border border-border shadow-[4px_4px_0px_#000] z-20">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setOpenMenuId(null)
+                          router.push(`/video/${video.id}`)
+                        }}
+                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-sans font-bold uppercase tracking-wider text-zinc-200 hover:bg-accent/10 hover:text-accent border-l-2 border-transparent hover:border-accent transition-all"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        Edit
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setOpenMenuId(null)
+                          setDeleteTarget(video)
+                        }}
+                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-sans font-bold uppercase tracking-wider text-red-400 hover:bg-red-500/10 hover:text-red-300 border-l-2 border-transparent hover:border-red-400 transition-all"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Delete
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
               <h3 className="font-sans font-bold text-lg mb-4 truncate uppercase tracking-tight group-hover:text-accent transition-colors">
@@ -169,8 +237,57 @@ export default function DashboardPage() {
                   {formatDate(video.createdAt)}
                 </span>
               </div>
-            </Link>
+            </div>
           ))}
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => !deleting && setDeleteTarget(null)}>
+          <div
+            className="bg-[#111111] border border-border p-6 w-full max-w-sm shadow-[8px_8px_0px_#000] animate-slide-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-display font-bold uppercase tracking-tight">Delete Video?</h3>
+              <button
+                onClick={() => !deleting && setDeleteTarget(null)}
+                className="text-zinc-500 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-zinc-400 font-sans text-sm mb-6">
+              This will permanently delete <span className="text-white font-bold">&ldquo;{deleteTarget.title}&rdquo;</span> and all its generated guides. This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                disabled={deleting}
+                onClick={() => setDeleteTarget(null)}
+                className="flex-1 px-4 py-2.5 font-sans font-bold uppercase tracking-wider text-sm border border-border text-zinc-300 hover:border-zinc-500 hover:text-white transition-all disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={deleting}
+                onClick={handleDelete}
+                className="flex-1 px-4 py-2.5 font-sans font-bold uppercase tracking-wider text-sm bg-red-600 text-white hover:bg-red-500 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {deleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    Delete
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
