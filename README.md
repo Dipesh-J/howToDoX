@@ -5,6 +5,10 @@
 <h1 align="center">HowToDoX</h1>
 
 <p align="center">
+  <a href="https://www.loom.com/share/e5f2db6bd5994bec9e347f1912b37012"><strong>Watch Product Demo (Loom)</strong></a>
+</p>
+
+<p align="center">
   <strong>Turn any video into a step-by-step guide — instantly.</strong>
 </p>
 
