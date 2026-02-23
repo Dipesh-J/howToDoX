@@ -3,11 +3,11 @@ import { auth } from '@clerk/nextjs/server'
 import { translateText, translateDocument } from '@/lib/lingod'
 
 export async function POST(request: NextRequest) {
-  const { userId } = await auth()
-  
-  if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  // Allow public translation for shared documents
+  // const { userId } = await auth()
+  // if (!userId) {
+  //   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // }
 
   const body = await request.json()
   const { content, sourceLocale, targetLocale } = body

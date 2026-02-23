@@ -48,9 +48,9 @@ function DashboardContent({
   }
 
   const navItems = [
+    { name: 'Search', path: '/search', icon: Search },
     { name: 'My Videos', path: '/dashboard', icon: Video },
     { name: 'Upload', path: '/upload', icon: UploadIcon },
-    { name: 'Search', path: '/search', icon: Search },
   ]
 
   return (
@@ -65,7 +65,7 @@ function DashboardContent({
             <div className="w-10 h-10 border border-border bg-background flex items-center justify-center group-hover:bg-accent group-hover:border-accent transition-colors shadow-[2px_2px_0px_#2F2F2F] group-hover:shadow-[2px_2px_0px_black]">
               <SquareTerminal className="w-5 h-5 text-foreground group-hover:text-black transition-colors" />
             </div>
-            <span className="font-display font-bold text-lg tracking-tight uppercase">HowToDoX</span>
+            <span className="font-display font-bold text-lg tracking-tight">HowToDo<span className="text-accent font-bold">X.</span></span>
           </Link>
         </div>
 
@@ -88,8 +88,9 @@ function DashboardContent({
           })}
         </nav>
 
-        <div className="p-6 border-t border-border flex items-center gap-3">
-          <div className="flex-1">
+        <div className="p-6 border-t border-border flex items-center justify-between">
+          <div className="flex items-center justify-between w-full">
+            <span className="text-xs font-sans text-zinc-500 uppercase tracking-wider font-bold">Profile</span>
             <UserButton
               afterSignOutUrl="/sign-in"
               appearance={{
@@ -116,7 +117,6 @@ function DashboardContent({
               }}
             />
           </div>
-          <span className="text-xs font-sans text-zinc-500 uppercase tracking-wider font-bold">Profile</span>
         </div>
       </aside>
 

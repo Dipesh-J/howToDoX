@@ -5,6 +5,7 @@ import { ArrowLeft, Loader2, CheckCircle, FileText, User, Clock } from 'lucide-r
 import { VideoEditor } from './video-editor'
 import { InlineTitle } from './inline-title'
 import { MarkdownRenderer } from '@/components/markdown-renderer'
+import { PublicDocumentViewer } from './public-document-viewer'
 
 export default async function VideoPage({
   params,
@@ -132,15 +133,7 @@ export default async function VideoPage({
 
         {/* Document — read-only rendered */}
         {video.frames.length > 0 ? (
-          <div className="border border-border bg-[#050505] shadow-[8px_8px_0px_#2F2F2F]">
-            <div className="border-b border-border px-6 py-4 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-accent" />
-              <span className="font-sans font-bold text-xs uppercase tracking-wider text-zinc-400">Guide Document</span>
-            </div>
-            <div className="p-8 max-w-3xl">
-              <MarkdownRenderer content={publicMarkdown} />
-            </div>
-          </div>
+          <PublicDocumentViewer initialMarkdown={publicMarkdown} />
         ) : (
           <div className="border border-border bg-[#050505] p-12 text-center shadow-[8px_8px_0px_#2F2F2F]">
             <p className="text-zinc-500 font-sans text-sm uppercase tracking-wider font-bold">No guide generated yet.</p>
