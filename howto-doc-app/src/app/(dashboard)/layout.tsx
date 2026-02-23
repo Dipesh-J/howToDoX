@@ -4,7 +4,7 @@ import { useUser, UserButton } from '@clerk/nextjs'
 import { useRouter, usePathname } from 'next/navigation'
 import { useEffect } from 'react'
 import Link from 'next/link'
-import { SquareTerminal, Video, Upload as UploadIcon, Search } from 'lucide-react'
+import { SquareTerminal, Video, Upload as UploadIcon, Search, Circle } from 'lucide-react'
 import { dark } from '@clerk/themes'
 import { AuthProvider } from './auth-provider'
 
@@ -50,6 +50,7 @@ function DashboardContent({
   const navItems = [
     { name: 'Search', path: '/search', icon: Search },
     { name: 'My Videos', path: '/dashboard', icon: Video },
+    { name: 'Record', path: '/record', icon: Circle },
     { name: 'Upload', path: '/upload', icon: UploadIcon },
   ]
 

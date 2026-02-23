@@ -89,6 +89,10 @@ export function VideoEditor({ video }: VideoEditorProps) {
 
   const handleAnalyze = async () => {
     setIsAnalyzing(true)
+    // Clear any stale overrides so the fresh generated doc shows through
+    setCustomMarkdown(null)
+    setTranslatedDoc('')
+    setSelectedLanguage('en')
     try {
       // 1. Send the entire video to Gemini natively!
       const newFramesData = await analyzeVideoMultimodal(video.id)
@@ -343,8 +347,8 @@ export function VideoEditor({ video }: VideoEditorProps) {
                     <button
                       onClick={() => setMarkdownMode('preview')}
                       className={`flex items-center gap-1.5 px-3 py-1.5 font-sans text-xs uppercase font-bold tracking-wider transition-all ${markdownMode === 'preview'
-                          ? 'bg-accent text-black'
-                          : 'text-zinc-400 hover:text-white'
+                        ? 'bg-accent text-black'
+                        : 'text-zinc-400 hover:text-white'
                         }`}
                     >
                       <Eye className="w-3.5 h-3.5" />
@@ -361,8 +365,8 @@ export function VideoEditor({ video }: VideoEditorProps) {
                         }
                       }}
                       className={`flex items-center gap-1.5 px-3 py-1.5 font-sans text-xs uppercase font-bold tracking-wider transition-all ${markdownMode === 'edit'
-                          ? 'bg-accent text-black'
-                          : 'text-zinc-400 hover:text-white'
+                        ? 'bg-accent text-black'
+                        : 'text-zinc-400 hover:text-white'
                         }`}
                     >
                       <Code2 className="w-3.5 h-3.5" />

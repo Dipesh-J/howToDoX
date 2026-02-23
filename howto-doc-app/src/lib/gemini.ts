@@ -23,15 +23,11 @@ export const analyzeFrame = async (imageUrl: string): Promise<string> => {
     },
   }
 
-  const prompt = `Analyze this screenshot from a how-to video. 
-Describe what action is being performed on screen.
-Be specific about:
-- What tool/interface is shown
-- What action is being taken
-- What the expected result would be
-- Any buttons, menus, or UI elements involved
-
-Format as a single instruction step, starting with an action verb.`
+  const prompt = `Analyze this screenshot from a how-to video.
+Write a single instructional step for the READER telling them what to do, as if writing a how-to guide or tutorial blog post.
+Use imperative voice (e.g. "Click the Submit button", "Open the File menu", "Scroll down to the Settings section").
+Do NOT describe what 'the user' does — write directly to the reader.
+Be specific about the UI element, button, or action involved.`
 
   const result = await model.generateContent([prompt, imagePart])
   const response = await result.response
@@ -93,15 +89,24 @@ export async function analyzeVideoMultimodal(videoId: string) {
     }
 
     // 3. Prompt Gemini
-    const prompt = `Watch this video guide carefully. Break down the tutorial into specific steps.
-For each step where an action happens, provide:
-1. The exact timestamp in seconds when the action occurs.
-2. A description of what is happening.
+    const prompt = `Watch this video guide carefully. Extract each meaningful action step and write it as an instruction for the READER — like a how-to blog post or tutorial guide.
 
-Return the response as a valid JSON array of objects. Example format:
+Rules:
+- Write each step in imperative voice, directed at the reader (e.g. "Click the red button", "Open the dropdown menu", "Scroll down to the Examples section").
+- Do NOT use phrases like "The user clicks", "The user navigates", or "The video shows" — write directly to the reader.
+- SKIP the very first frame if it shows only an idle or starting screen with no meaningful action (e.g. a blank page, a recording interface, or an app just opened).
+- SKIP the very last frame if it just shows the user returning to the recording application or switching back to the recording tab — that is not part of the tutorial.
+- SKIP any step where no meaningful action is being taken.
+- Each step must be a clear, actionable instruction.
+
+For each step provide:
+1. The exact timestamp in seconds when the action occurs.
+2. A concise instructional description written for the reader.
+
+Return the response as a valid JSON array. Example:
 [
-  { "timestamp": 12, "description": "Clicking the big red button" },
-  { "timestamp": 25, "description": "Typing the email address and submitting" }
+  { "timestamp": 5, "description": "Click the large red Submit button to save your changes." },
+  { "timestamp": 18, "description": "Open the File menu and select New Project." }
 ]
 Only return the raw JSON array, no markdown blocks or backticks.`
 
