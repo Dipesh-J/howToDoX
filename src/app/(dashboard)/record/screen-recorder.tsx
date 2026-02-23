@@ -21,12 +21,12 @@ function formatDuration(s: number) {
 function DraggableWebcamPip({ streamRef }: { streamRef: React.RefObject<MediaStream | null> }) {
     const pipRef = useRef<HTMLDivElement>(null)
     const drag = useRef({ active: false, startX: 0, startY: 0, origX: 0, origY: 0 })
-    const [pos, setPos] = useState({ x: 20, y: 20 }) // will be corrected to bottom-right on mount
-
-    // Position to bottom-right after first paint
-    useEffect(() => {
-        setPos({ x: window.innerWidth - 220, y: window.innerHeight - 200 })
-    }, [])
+    const [pos, setPos] = useState(() => {
+        if (typeof window === 'undefined') {
+            return { x: 20, y: 20 }
+        }
+        return { x: window.innerWidth - 220, y: window.innerHeight - 200 }
+    })
 
     // Callback ref — fires the INSTANT the <video> element is inserted into the DOM.
     // This avoids the bug where useRef+useEffect can't find the element because the
@@ -108,6 +108,7 @@ export function ScreenRecorder() {
     const timerRef = useRef<NodeJS.Timeout | null>(null)
     const screenStreamRef = useRef<MediaStream | null>(null)
     const webcamStreamRef = useRef<MediaStream | null>(null)
+    const micStreamRef = useRef<MediaStream | null>(null)
     const previewRef = useRef<HTMLVideoElement>(null)
 
     // Canvas compositing refs (used when webcam is ON)
@@ -115,6 +116,8 @@ export function ScreenRecorder() {
     const hiddenScreenVidRef = useRef<HTMLVideoElement | null>(null)
     const hiddenCamVidRef = useRef<HTMLVideoElement | null>(null)
     const animFrameRef = useRef<number | null>(null)
+    const audioContextRef = useRef<AudioContext | null>(null)
+    const audioDestinationRef = useRef<MediaStreamAudioDestinationNode | null>(null)
 
     // Cleanup on unmount
     useEffect(() => {
@@ -133,6 +136,13 @@ export function ScreenRecorder() {
         screenStreamRef.current = null
         webcamStreamRef.current?.getTracks().forEach(t => t.stop())
         webcamStreamRef.current = null
+        micStreamRef.current?.getTracks().forEach(t => t.stop())
+        micStreamRef.current = null
+        audioDestinationRef.current = null
+        if (audioContextRef.current) {
+            audioContextRef.current.close().catch(() => { /* no-op */ })
+            audioContextRef.current = null
+        }
 
         // Release hidden video elements
         if (hiddenScreenVidRef.current) { hiddenScreenVidRef.current.srcObject = null }
@@ -146,7 +156,6 @@ export function ScreenRecorder() {
     const buildCompositeStream = useCallback((
         screenStream: MediaStream,
         camStream: MediaStream | null,
-        audioTracks: MediaStreamTrack[],
     ): MediaStream => {
         const screenTrack = screenStream.getVideoTracks()[0]
         const settings = screenTrack.getSettings()
@@ -203,10 +212,40 @@ export function ScreenRecorder() {
         }
         draw()
 
-        const canvasStream = canvas.captureStream(30)
-        // Add audio tracks from the screen capture
-        audioTracks.forEach(t => canvasStream.addTrack(t))
-        return canvasStream
+        return canvas.captureStream(30)
+    }, [])
+
+    const buildMixedAudioTrack = useCallback((
+        screenStream: MediaStream,
+        micStream: MediaStream | null,
+    ): MediaStreamTrack | null => {
+        const screenAudioTracks = screenStream.getAudioTracks()
+        const micAudioTracks = micStream?.getAudioTracks() ?? []
+
+        if (screenAudioTracks.length === 0 && micAudioTracks.length === 0) {
+            return null
+        }
+
+        const audioContext = new AudioContext()
+        audioContextRef.current = audioContext
+        const destination = audioContext.createMediaStreamDestination()
+        audioDestinationRef.current = destination
+
+        if (screenAudioTracks.length > 0) {
+            const screenSource = audioContext.createMediaStreamSource(new MediaStream(screenAudioTracks))
+            const screenGain = audioContext.createGain()
+            screenGain.gain.value = 1
+            screenSource.connect(screenGain).connect(destination)
+        }
+
+        if (micAudioTracks.length > 0) {
+            const micSource = audioContext.createMediaStreamSource(new MediaStream(micAudioTracks))
+            const micGain = audioContext.createGain()
+            micGain.gain.value = 1
+            micSource.connect(micGain).connect(destination)
+        }
+
+        return destination.stream.getAudioTracks()[0] ?? null
     }, [])
 
     const startRecording = useCallback(async () => {
@@ -221,7 +260,26 @@ export function ScreenRecorder() {
             })
             screenStreamRef.current = screenStream
 
-            // 2. Optional webcam
+            // 2. Optional mic capture (explicit permission prompt)
+            let micStream: MediaStream | null = null
+            if (useMic) {
+                try {
+                    micStream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true,
+                        },
+                        video: false,
+                    })
+                    micStreamRef.current = micStream
+                } catch (micErr) {
+                    console.warn('Microphone access denied/unavailable:', micErr)
+                    setError('Microphone permission denied. Recording will continue without mic audio.')
+                }
+            }
+
+            // 3. Optional webcam
             let camStream: MediaStream | null = null
             if (useWebcam) {
                 try {
@@ -232,15 +290,28 @@ export function ScreenRecorder() {
                 }
             }
 
-            // 3. Build the stream to record
+            // 4. Build the stream to record
             //    - With webcam: composite screen + cam into canvas (SINGLE video track — fixes blank output)
             //    - Without webcam: record screenStream directly (fastest, highest quality)
-            const audioTracks = screenStream.getAudioTracks()
-            const recordingStream = camStream
-                ? buildCompositeStream(screenStream, camStream, audioTracks)
+            const videoStream = camStream
+                ? buildCompositeStream(screenStream, camStream)
                 : screenStream
 
-            // 4. MIME type negotiation
+            const recordingStream = new MediaStream()
+            const videoTrack = videoStream.getVideoTracks()[0]
+            if (!videoTrack) {
+                throw new Error('No video track found for recording')
+            }
+            recordingStream.addTrack(videoTrack)
+
+            if (useMic) {
+                const mixedAudioTrack = buildMixedAudioTrack(screenStream, micStream)
+                if (mixedAudioTrack) {
+                    recordingStream.addTrack(mixedAudioTrack)
+                }
+            }
+
+            // 5. MIME type negotiation
             const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
                 ? 'video/webm;codecs=vp9'
                 : MediaRecorder.isTypeSupported('video/webm')
@@ -276,7 +347,7 @@ export function ScreenRecorder() {
                 setError('Could not start recording. Please try again.')
             }
         }
-    }, [useWebcam, useMic, stopAllStreams, buildCompositeStream])
+    }, [useWebcam, useMic, stopAllStreams, buildCompositeStream, buildMixedAudioTrack])
 
     const stopRecording = useCallback(() => {
         if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop()
@@ -367,8 +438,8 @@ export function ScreenRecorder() {
                                 {useMic ? <Mic className="w-4 h-4 text-accent" /> : <MicOff className="w-4 h-4 text-zinc-500" />}
                             </div>
                             <div>
-                                <span className="font-sans font-bold text-sm uppercase tracking-wide block">System Audio</span>
-                                <span className="font-sans text-xs text-zinc-500">Record microphone / tab audio</span>
+                                <span className="font-sans font-bold text-sm uppercase tracking-wide block">Mic + Tab Audio</span>
+                                <span className="font-sans text-xs text-zinc-500">Requests mic permission and records shared tab/system sound</span>
                             </div>
                         </div>
                         <button
